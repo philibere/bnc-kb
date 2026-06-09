@@ -36,6 +36,43 @@ A single `node` table unifies the hierarchy (`capability` → `business_function
 
 Deliberately bounded. **In scope:** the full node schema, ZIP ingestion of architecture repos, hybrid search with a pluggable embedder, and the three-role REST API. **Deferred:** Git webhooks/CI triggers, multi-database-per-domain federation, component/Builder repos, an MCP surface, real AsciiDoc conversion, active RLS, and a committed embedding model.
 
+## Running locally
+
+```bash
+docker compose up -d                       # Postgres 18 + pgvector on :5433
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env                       # adjust keys/URL if needed
+python -c "from bnc_kb.db.migrate import apply_migrations; from bnc_kb.config import load_settings; print(apply_migrations(load_settings().database_url))"
+uvicorn bnc_kb.api.app:app --reload
+```
+
+Interactive API docs: http://localhost:8000/docs
+
+Ingest a capability archive (write role). The ZIP must contain a `kb-manifest.yaml`
+at its root declaring `capability_slug`, `category`, `domain`, and `source_commit`:
+
+```bash
+zip -r cap.zip my-capability/
+curl -s -H "X-API-Key: write-key" -F "file=@cap.zip" http://localhost:8000/ingest
+```
+
+Search (read role):
+
+```bash
+curl -s -H "X-API-Key: read-key" -H "Content-Type: application/json" \
+  -d '{"query":"overtime rules","k":5}' http://localhost:8000/search
+```
+
+## Tests
+
+```bash
+docker compose up -d
+pytest                        # unit + integration
+pytest -m "not integration"   # unit only, no database required
+```
+
 ## Design
 
-Full design and implementation plan: [`docs/superpowers/specs/2026-06-09-bnc-kb-poc-design.md`](docs/superpowers/specs/2026-06-09-bnc-kb-poc-design.md).
+Full design: [`docs/superpowers/specs/2026-06-09-bnc-kb-poc-design.md`](docs/superpowers/specs/2026-06-09-bnc-kb-poc-design.md).
+Implementation plan: [`docs/superpowers/plans/2026-06-09-bnc-kb-poc.md`](docs/superpowers/plans/2026-06-09-bnc-kb-poc.md).
