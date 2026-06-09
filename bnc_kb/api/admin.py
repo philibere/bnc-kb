@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import psycopg
 from fastapi import APIRouter, Depends, HTTPException
 
 from bnc_kb.api.auth import require_role
@@ -40,8 +41,8 @@ def add_dimension(body: DimensionIn, _role: str = Depends(require_role("admin"))
                 "INSERT INTO spec_dimension (code, label, description) VALUES (%s, %s, %s)",
                 (body.code, body.label, body.description),
             )
-        except Exception as e:  # unique violation etc.
-            raise HTTPException(status_code=409, detail=str(e))
+        except psycopg.errors.UniqueViolation:
+            raise HTTPException(status_code=409, detail=f"dimension {body.code!r} already exists")
     return {"code": body.code}
 
 
@@ -61,8 +62,8 @@ def add_link_type(body: LinkTypeIn, _role: str = Depends(require_role("admin")))
                 "VALUES (%s, %s, %s, %s)",
                 (body.code, body.label, body.description, body.directed),
             )
-        except Exception as e:
-            raise HTTPException(status_code=409, detail=str(e))
+        except psycopg.errors.UniqueViolation:
+            raise HTTPException(status_code=409, detail=f"link type {body.code!r} already exists")
     return {"code": body.code}
 
 

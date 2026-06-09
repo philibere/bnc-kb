@@ -25,7 +25,15 @@ def test_ingest_then_search_and_spec(client, sample_zip):
     assert s.status_code == 200
     body = s.json()
     assert "coverage" in body
-    assert isinstance(body["rows"], list)
+    assert body["rows"], "search should return at least one hit"
+
+    # exercise GET /spec/{id} on a returned node, with the coverage envelope
+    node_id = body["rows"][0]["id"]
+    sp = client.get(f"/spec/{node_id}", headers=READ)
+    assert sp.status_code == 200, sp.text
+    spec_body = sp.json()
+    assert "coverage" in spec_body
+    assert isinstance(spec_body["rows"], list)
 
 
 def test_read_key_cannot_ingest(client, sample_zip):

@@ -28,6 +28,9 @@ def search(req: SearchRequest, _role: str = Depends(require_role("read"))) -> Se
     with get_pool().connection() as conn:
         rows = search_specs(conn, qvec, req.dimension, req.status, req.k)
     hits = [NodeHit(**r) for r in rows]
+    # `partial`: the result count hit the k limit, so more matches may exist beyond
+    # this page. A conservative flag (can be a false positive when the true count
+    # equals k exactly) — the point is to never silently truncate.
     return SearchResponse(rows=hits, coverage=Coverage(partial=len(hits) >= req.k))
 
 
