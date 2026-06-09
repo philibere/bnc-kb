@@ -18,7 +18,7 @@ Three roles, enforced at the API layer:
 - **write** — ingest capability archives.
 - **admin** — full access, including whitelist governance and maintenance.
 
-The schema also ships RLS policies and scoped DB roles, written but left disabled, so per-capability cloisonnement can be enabled later without a migration.
+The schema also ships RLS policies, written but left disabled, so per-capability cloisonnement can be turned on later. (Scoped DB roles and grants are deferred — the policies stay inert until both RLS and roles are added.)
 
 ## Stack
 

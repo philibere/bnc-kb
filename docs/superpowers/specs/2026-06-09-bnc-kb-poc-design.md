@@ -16,7 +16,7 @@ The README sets the POC boundary; the ideation spec supplies the data model and 
 - AsciiDoc handling: store raw `.adoc`/`.md` body, extract structured `attrs` via regex.
 - Hybrid search: pgvector cosine + dimension/status filter, with a pluggable embedding generator.
 - Three REST modules — add, search, admin — mapped to three roles (read / write / admin).
-- App-level role enforcement; RLS policies and scoped DB roles written into migrations but left disabled.
+- App-level role enforcement; RLS policies written into migrations but left disabled. (Scoped DB roles are deferred — the policies are inert until both RLS and roles are added.)
 
 ### Out of scope (explicitly deferred)
 
@@ -54,7 +54,7 @@ Adopt the ideation spec's DDL essentially verbatim:
 
 - Single database. Capability `category` and `domain` are carried on `capability` nodes (a `domain` value kept for routing-readiness even though only one database exists in the POC); other family-specific structure lives in `attrs` (JSONB).
 - `node_chunk_embedding.embedding` stays `vector(1024)` (placeholder per the spec; aligned with Vooban/BNC later).
-- RLS policies and scoped DB roles are written into a migration but **not enabled** — the schema is RLS-ready with no further migration needed to turn it on.
+- RLS policies are written into a migration but **not enabled** — the table structure is RLS-ready. Scoped DB roles and `GRANT`s are deferred; enabling cloisonnement later means turning on RLS *and* adding roles, not a no-op.
 - Seed `spec_dimension` with the 11 architecture dimensions: `context-and-requirements`, `quality-attributes`, `constraints`, `architecture-diagrams`, `infrastructure-costs`, `architectural-decisions`, `risks-and-technical-debts`, `processes`, `solution-requirements`, `data-requirements`, `business-rules`.
 - Seed `link_type` with `belongs_to`, `derives_from`, `supersedes`, `realizes`, `traces_to`, `depends_on`.
 
@@ -127,7 +127,7 @@ Test-driven throughout.
 - A `read` client runs `get_spec(head, dimension)` and hybrid search in ≤ 1 s, each with an explicit coverage envelope.
 - Dimensions are whitelist-governed through the admin module; ingestion cannot invent dimensions.
 - Versioning produces a traceable supersede chain (slug + version + supersedes_id + source_commit).
-- The schema is RLS-ready: no migration is needed to enable cloisonnement later.
+- The table structure is RLS-ready (policies written, disabled); enabling cloisonnement later means turning on RLS and adding scoped roles/grants.
 
 ## 10. Milestones
 

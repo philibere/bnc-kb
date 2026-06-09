@@ -54,3 +54,27 @@ def test_admin_add_dimension_governed(client):
 
 def test_health_open(client):
     assert client.get("/admin/health").status_code == 200
+
+
+def test_ingest_missing_manifest_returns_400(client):
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("cap/architecture/documents/01-context-and-requirements/c.adoc", "body")
+    r = client.post(
+        "/ingest",
+        files={"file": ("nomanifest.zip", buf.getvalue(), "application/zip")},
+        headers=WRITE,
+    )
+    assert r.status_code == 400
+
+
+def test_reembed_recomputes_after_ingest(client, sample_zip):
+    client.post(
+        "/ingest", files={"file": ("cap.zip", sample_zip, "application/zip")}, headers=WRITE
+    )
+    r = client.post("/admin/reembed", headers=ADMIN)
+    assert r.status_code == 200
+    assert r.json()["chunks"] >= 1
