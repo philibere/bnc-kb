@@ -57,12 +57,8 @@ def build_nodes(
             kind = "decision_record"
         elif RISK_RE.search(base):
             kind = "risk"
-        elif BF_RE.search(path):
-            kind = "document"
         else:
-            # Architecture .adoc files that are neither ADR nor RISK are unreached
-            unreached.append(path)
-            continue
+            kind = "document"
 
         body = files[path]
         attrs = extract_adoc_attrs(body) if base.endswith(".adoc") else {}

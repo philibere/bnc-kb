@@ -39,9 +39,23 @@ def test_build_nodes_shapes_tree():
 
     assert len(by_kind["risk"]) == 1
 
+    # ctx.adoc is a capability-level document; the two requirement files sit under
+    # the business-fct-1 container.
     docs = by_kind["document"]
-    assert {d.dimension_code for d in docs} == {"solution-requirements", "business-rules"}
-    assert all(d.parent_local_id == bf.local_id for d in docs)
+    assert {d.dimension_code for d in docs} == {
+        "context-and-requirements",
+        "solution-requirements",
+        "business-rules",
+    }
+    ctx = next(d for d in docs if d.dimension_code == "context-and-requirements")
+    assert ctx.parent_local_id == cap.local_id
+    assert ctx.attrs["status"] == "draft"
+    bf_docs = [
+        d
+        for d in docs
+        if d.dimension_code in {"solution-requirements", "business-rules"}
+    ]
+    assert all(d.parent_local_id == bf.local_id for d in bf_docs)
 
     assert any("00-business-capability-architecture" in p for p in unreached)
     assert not any("kb-manifest" in p for p in unreached)
