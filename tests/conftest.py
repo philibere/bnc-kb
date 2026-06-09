@@ -25,12 +25,44 @@ def _schema():
     _migrated_once()
 
 
+_SEED_DIMENSIONS = (
+    "context-and-requirements",
+    "quality-attributes",
+    "constraints",
+    "architecture-diagrams",
+    "infrastructure-costs",
+    "architectural-decisions",
+    "risks-and-technical-debts",
+    "processes",
+    "solution-requirements",
+    "data-requirements",
+    "business-rules",
+)
+
+_SEED_LINK_TYPES = (
+    "belongs_to",
+    "derives_from",
+    "supersedes",
+    "realizes",
+    "traces_to",
+    "depends_on",
+)
+
+
 @pytest.fixture
 def db():
     """A connection with the data tables truncated before each test."""
     with psycopg.connect(TEST_DB_URL, autocommit=True) as conn:
         conn.execute(
             "TRUNCATE node_chunk_embedding, spec_link, node, ingestion RESTART IDENTITY CASCADE"
+        )
+        conn.execute(
+            "DELETE FROM spec_dimension WHERE code <> ALL(%s::text[])",
+            (list(_SEED_DIMENSIONS),),
+        )
+        conn.execute(
+            "DELETE FROM link_type WHERE code <> ALL(%s::text[])",
+            (list(_SEED_LINK_TYPES),),
         )
         yield conn
 

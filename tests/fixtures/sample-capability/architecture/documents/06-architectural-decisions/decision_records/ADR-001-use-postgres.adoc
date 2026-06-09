@@ -1,0 +1,5 @@
+:status: accepted
+:deciders: mac
+
+== Decision
+Use PostgreSQL with pgvector.
