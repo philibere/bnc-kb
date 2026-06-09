@@ -11,8 +11,6 @@ from bnc_kb.parser.archive import find_manifest, read_archive
 from bnc_kb.parser.manifest import parse_manifest
 from bnc_kb.parser.tree import build_nodes
 
-CONTAINER_KINDS = {"capability", "business_function"}
-
 
 def ingest_archive(conn: Connection, data: bytes, embedder: Embedder) -> IngestSummary:
     """End-to-end: read ZIP -> manifest -> node tree -> persist."""
@@ -32,6 +30,10 @@ def persist_nodes(
     unreached: list[str],
     embedder: Embedder,
 ) -> IngestSummary:
+    # Single-worker assumption: the idempotency check runs before the write
+    # transaction. With one ingestion worker (the POC's model) this is race-free.
+    # Under concurrent workers the natural-key unique indexes (0005) make a
+    # duplicate ingest fail loudly rather than corrupt the tree.
     hit = conn.execute(
         "SELECT summary FROM ingestion WHERE capability_slug = %s AND source_commit = %s",
         (manifest.capability_slug, manifest.source_commit),
@@ -61,7 +63,8 @@ def persist_nodes(
                 continue
 
             # leaf
-            dims.add(spec.dimension_code)
+            if spec.dimension_code:
+                dims.add(spec.dimension_code)
             outcome, node_id = _upsert_leaf(conn, parent_id, manifest.source_commit, spec)
             local_to_id[spec.local_id] = node_id
             if outcome == "created":
@@ -130,7 +133,7 @@ def _upsert_leaf(
     supersedes_id = None
     outcome = "created"
     if existing:
-        version = existing[2] + 1
+        version = (existing[2] or 0) + 1
         supersedes_id = existing[0]
         outcome = "versioned"
         conn.execute("UPDATE node SET status = 'superseded' WHERE id = %s", (existing[0],))
