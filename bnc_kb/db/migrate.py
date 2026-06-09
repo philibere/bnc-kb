@@ -23,9 +23,13 @@ def apply_migrations(database_url: str) -> list[str]:
         for path in sorted(SQL_DIR.glob("*.sql")):
             if path.name in done:
                 continue
-            conn.execute(path.read_text())
-            conn.execute(
-                "INSERT INTO schema_migrations (filename) VALUES (%s)", (path.name,)
-            )
+            # Each file applies atomically: a mid-file failure rolls back the whole
+            # file and leaves schema_migrations unchanged, so the next run retries
+            # cleanly instead of hitting half-created objects.
+            with conn.transaction():
+                conn.execute(path.read_text())
+                conn.execute(
+                    "INSERT INTO schema_migrations (filename) VALUES (%s)", (path.name,)
+                )
             applied.append(path.name)
     return applied

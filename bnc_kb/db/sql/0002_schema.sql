@@ -67,7 +67,9 @@ CREATE TABLE spec_link (
         OR (dst_id IS NULL AND dst_urn IS NOT NULL)
     ),
     CONSTRAINT no_self_loop CHECK (dst_id IS NULL OR dst_id <> src_id),
-    CONSTRAINT uq_edge UNIQUE (src_id, dst_id, dst_urn, rel)
+    -- NULLS NOT DISTINCT (PG15+): a NULL dst_id (external edge) or NULL dst_urn
+    -- (internal edge) must not defeat dedup; without it duplicate edges slip past.
+    CONSTRAINT uq_edge UNIQUE NULLS NOT DISTINCT (src_id, dst_id, dst_urn, rel)
 );
 
 CREATE INDEX idx_spec_link_src ON spec_link (src_id);
