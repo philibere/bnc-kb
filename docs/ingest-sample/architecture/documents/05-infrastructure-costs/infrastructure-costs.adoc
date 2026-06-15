@@ -1,0 +1,12 @@
+:status: approved
+
+== Coûts d'infrastructure
+
+Empreinte minimale, cohérente avec un POC d'équipe.
+
+* *Calcul* — une petite instance applicative suffit; charge dominée par quelques
+  dizaines de participants.
+* *Base de données* — une seule petite base; volumétrie négligeable (25 joueurs, 5
+  boîtes, quelques dizaines de sélections).
+* *Réseau* — aucun trafic sortant pour l'amorce (source locale).
+* *Stockage* — négligeable; pas de médias, pas d'historique de pointage détaillé.

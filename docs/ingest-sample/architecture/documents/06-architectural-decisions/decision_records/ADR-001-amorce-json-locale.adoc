@@ -1,0 +1,19 @@
+:status: accepted
+:deciders: organisateur
+
+== Décision
+
+Amorcer les boîtes à partir d'un fichier JSON local versionné plutôt que d'appeler
+l'API de la LNH en direct.
+
+== Contexte
+
+L'amorce doit être reproductible et fonctionner hors ligne. Un appel réseau live
+introduirait variabilité et dépendance externe au moment de la génération.
+
+== Conséquences
+
+* Reproductibilité totale : même fichier, même répartition.
+* Le pointage initial peut être périmé; la mise à jour manuelle par l'organisateur le
+  corrige (voir FA2).
+* La provenance reste traçable : le fichier est dérivé de `skater-stats-leaders`.

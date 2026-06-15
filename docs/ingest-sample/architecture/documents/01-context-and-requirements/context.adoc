@@ -1,0 +1,25 @@
+:status: approved
+:domain: engagement
+
+== Contexte
+
+Un pool de hockey entre collègues. Les participants composent un alignement en
+choisissant un joueur par boîte; les boîtes regroupent des marqueurs de la LNH de
+calibre comparable. Le classement suit les points (buts + aides) des joueurs retenus.
+
+== Acteurs
+
+* *Participant* — compose sa sélection, suit le classement et consulte les choix des
+  rivaux.
+* *Organisateur* — amorce et configure les boîtes, met à jour le pointage.
+
+== Objectifs
+
+* Offrir une sélection simple et sans ambiguïté (un choix par boîte).
+* Fournir un classement à jour et explicable (détail des points par joueur).
+* Rester reproductible et utilisable hors ligne pour l'amorce.
+
+== Portée
+
+POC. Deux fonctions d'affaires : création de la sélection (FA1) et suivi, classement
+et administration (FA2).

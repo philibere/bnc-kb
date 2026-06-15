@@ -1,0 +1,19 @@
+:status: accepted
+:deciders: organisateur
+
+== Décision
+
+Imposer un seul choix par boîte, avec remplacement automatique de la sélection
+précédente.
+
+== Contexte
+
+Le jeu repose sur un arbitrage : un joueur par palier de calibre. Permettre plusieurs
+choix par boîte ou aucun briserait la comparabilité entre alignements.
+
+== Conséquences
+
+* Modèle de sélection simple et sans ambiguïté.
+* La validation d'alignement (FA1) se réduit à « un choix dans chacune des cinq
+  boîtes ».
+* La soumission est refusée tant que l'alignement est incomplet.

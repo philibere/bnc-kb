@@ -1,0 +1,26 @@
+:status: approved
+
+== Vue d'ensemble
+
+[source]
+----
+Participant / Organisateur
+        |
+   Application web (SPA)
+        |
+     API applicative
+        |
+   Base de données
+        ^
+        |
+  Fichier JSON local (amorce des 25 marqueurs)
+----
+
+== Composants
+
+* *SPA* — visualisation des boîtes, sélection, soumission, classement et détails.
+* *API applicative* — sélection, calcul du classement, administration des boîtes et du
+  pointage.
+* *Base de données* — boîtes, joueurs, sélections des participants.
+* *Fichier d'amorce* — JSON local, source de vérité pour la génération initiale des
+  boîtes.

@@ -1,0 +1,11 @@
+:status: approved
+
+== Contraintes
+
+* *Hors ligne pour l'amorce* — aucun appel réseau live vers l'API de la LNH; la source
+  est un fichier JSON local versionné dans le dépôt.
+* *Données figées* — le pointage évolue uniquement par mise à jour manuelle de
+  l'organisateur, pas par synchronisation automatique.
+* *Échelle POC* — conçu pour un pool d'équipe (dizaines de participants), pas pour une
+  charge publique.
+* *Cinq boîtes de cinq* — la structure 25 joueurs / 5 boîtes est fixe pour le POC.

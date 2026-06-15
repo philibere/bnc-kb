@@ -1,0 +1,12 @@
+:status: approved
+
+== Processus — Amorce des boîtes
+
+. L'organisateur déclenche l'amorce.
+. Le système lit le fichier JSON local des 25 meilleurs marqueurs (triés par points).
+. Les joueurs sont découpés en 5 boîtes de 5 selon leur rang (1-5, 6-10, ...).
+. Les boîtes reçoivent des libellés neutres (« Boîte 1 » à « Boîte 5 »).
+. Le pool est prêt; les participants peuvent composer leur alignement.
+
+Aucun appel réseau n'est effectué. L'opération est idempotente : relancer l'amorce sur
+le même fichier reproduit la même répartition.

@@ -1,0 +1,23 @@
+:status: approved
+
+== Attributs de qualité
+
+=== Simplicité
+
+L'expérience tient en quelques gestes : voir les boîtes, choisir un joueur par boîte,
+soumettre. Aucune authentification complexe pour le participant (nom saisi).
+
+=== Reproductibilité
+
+L'amorce des boîtes est déterministe : le même fichier JSON local produit toujours la
+même répartition, sans appel réseau.
+
+=== Fraîcheur du classement
+
+Le classement reflète la dernière mise à jour de pointage de l'organisateur; le
+recalcul est automatique et perceptiblement immédiat à l'échelle d'un pool d'équipe.
+
+=== Lisibilité du résultat
+
+Le classement est explicable : un participant peut remonter du total au détail des
+points par joueur.
