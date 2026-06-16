@@ -688,6 +688,10 @@ class BncKbSink:
         Edges are matched by ``(src, rel, dst_ref)`` identity (dst_id/pending ignored),
         so a previously-resolved edge is NOT churned back to pending on re-merge: the
         operation is idempotent on a stable corpus.
+
+        Merge is ADDITIVE / upsert: it deletes only edges internal to the batch (both
+        endpoints in it) and never garbage-collects sub-nodes a re-ingested spec dropped
+        (they are out of the batch footprint). Run a whole-corpus ingest to prune.
         """
         batch_ids = [n.id for n in result.nodes]
         conn = self._connect()
@@ -714,9 +718,15 @@ class BncKbSink:
                 state = StoreState(node_hashes=node_hashes, edge_tuples=set(), chunk_keys=chunk_keys)
                 d = diff(state, result)
 
+                batch_set = set(batch_ids)
                 desired_edges = {(e.src_id, _kv(e.kind), e.dst_ref): e for e in result.edges}
                 edge_inserts = [e for k, e in desired_edges.items() if k not in stored_edge_keys]
-                edge_delete_keys = [k for k in stored_edge_keys if k not in desired_edges]
+                # Delete only stored edges INTERNAL to the batch footprint (dst also in
+                # the batch). A shared container node (e.g. Module) carries `contains`
+                # edges to specs NOT in this batch; a partial merge must never drop them.
+                edge_delete_keys = [
+                    k for k in stored_edge_keys if k not in desired_edges and k[2] in batch_set
+                ]
 
                 # FK-safe order, scoped to the batch (state held only batch-owned rows).
                 for k in edge_delete_keys:

@@ -158,6 +158,36 @@ FEATURE2_FILES: dict[str, str] = {
     "modules/team-module/features/FEAT-T-009.md": FEATURE2_MD,
 }
 
+# A second feature in the SAME module as FEAT-T-001 (shared Module node), to guard the
+# partial-merge bug where merging one feature deletes the shared Module's edges to the
+# other features.
+FEATURE_SAME_MODULE_MD = """---
+id: FEAT-T-010
+kind: feature
+title: Importer les joueurs
+status: draft
+module: test-module
+actors:       [orga]
+entities:     [joueur]
+summary: >
+  L'organisateur importe une liste de joueurs depuis un fichier.
+---
+
+## Exigences
+
+### REQ-010  [F-BUSINESS]
+statement:  L'organisateur DOIT pouvoir importer des joueurs.
+hash:       imp010
+acceptance: |
+  Etant donne un fichier
+  Quand l'organisateur l'importe
+  Alors les joueurs sont ajoutes
+"""
+
+SAME_MODULE_FILES: dict[str, str] = {
+    "modules/test-module/features/FEAT-T-010.md": FEATURE_SAME_MODULE_MD,
+}
+
 
 def write_corpus(root, files: dict[str, str]) -> str:
     for rel, content in files.items():
