@@ -99,6 +99,10 @@ from a bnc-shaper checkout with `make sync-metamodel` (override `SHAPER=...`).
 Query-time embedding (`/search`) uses the SAME embedder as ingestion (shared
 `EMBEDDING_MODEL`), so the query vector and the stored vectors live in one space.
 
+The `link_type` whitelist (the `spec_link.rel` FK target) is seeded from the manifest's
+edge kinds at ingest time, so any corpus edge kind has its FK target regardless of which
+metamodel is active (0006 only seeds a fixed subset).
+
 ## Tests
 
 ```bash

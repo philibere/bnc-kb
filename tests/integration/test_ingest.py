@@ -6,7 +6,10 @@ import pytest
 from _corpus import duplicate_id_corpus, valid_corpus
 
 from spec_ingestion import engine
+from spec_ingestion import metamodel as mm
 from spec_ingestion.sinks import BncKbSink, _nid
+
+from bnc_kb.ingestion import run_corpus_ingest
 
 pytestmark = pytest.mark.integration
 
@@ -67,6 +70,14 @@ def test_incremental_reingest_is_idempotent(db, db_url, tmp_path):
     assert delta["chunks"]["embedded"] == 0
     assert delta["chunks"]["deleted"] == 0
     assert _counts(db) == before  # store unchanged
+
+
+def test_ingest_seeds_all_manifest_edge_kinds(db, db_url, tmp_path):
+    # link_type (the spec_link.rel FK target) is aligned with the manifest, not just
+    # the 16 hardcoded in 0006, so any corpus edge kind has its FK target.
+    run_corpus_ingest(valid_corpus(tmp_path), db_url, incremental=False)
+    present = {r[0] for r in db.execute("SELECT code FROM link_type").fetchall()}
+    assert set(mm.EDGE_KINDS) <= present
 
 
 def test_validation_rejects_duplicate_id_and_writes_nothing(db, db_url, tmp_path):
