@@ -1,28 +1,25 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 
-class IngestManifest(BaseModel):
-    capability_slug: str
-    category: str
-    domain: str
-    source_commit: str
+class IngestResult(BaseModel):
+    """Outcome of one ingestion run (shaper engine -> bnc-kb store).
 
+    Mirrors the engine build report: counts from ``stats``, the number of
+    unresolved cross-references (``pending_edges``), validation faults (when
+    ``status == "rejected"``) and the incremental ``delta`` when reconciling.
+    """
 
-class IngestSummary(BaseModel):
-    capability_slug: str
-    source_commit: str
-    nodes_created: int = 0
-    nodes_versioned: int = 0
-    nodes_skipped: int = 0
-    dimensions_seen: list[str] = Field(default_factory=list)
-    sources_unreached: list[str] = Field(default_factory=list)
-    idempotent_hit: bool = False
+    status: str
+    nodes: int = 0
+    edges: int = 0
+    chunks: int = 0
+    pending_edges: int = 0
+    faulty: list[dict] = Field(default_factory=list)
+    delta: dict | None = None
 
 
 class Coverage(BaseModel):
@@ -75,17 +72,3 @@ class LinkTypeIn(BaseModel):
     label: str
     description: str | None = None
     directed: bool = True
-
-
-@dataclass
-class NodeSpec:
-    """An intermediate, pre-persistence node produced by the parser."""
-
-    local_id: str
-    kind: str
-    slug: str
-    parent_local_id: str | None = None
-    dimension_code: str | None = None
-    body: str | None = None
-    source_path: str | None = None
-    attrs: dict[str, Any] = field(default_factory=dict)

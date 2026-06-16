@@ -1,57 +1,87 @@
-import pytest
+from __future__ import annotations
 
-from bnc_kb.embeddings import StubEmbedder
-from bnc_kb.parser.tree import build_nodes
-from bnc_kb.models import IngestManifest
-from bnc_kb.queries.ingest import persist_nodes
+from uuid import UUID
+
+import pytest
+from _corpus import duplicate_id_corpus, valid_corpus
+
+from spec_ingestion import engine
+from spec_ingestion import metamodel as mm
+from spec_ingestion.sinks import BncKbSink, _nid
+
+from bnc_kb.ingestion import run_corpus_ingest
 
 pytestmark = pytest.mark.integration
 
 
-def _ingest(db, files, commit="c1"):
-    m = IngestManifest(
-        capability_slug="manage-time", category="ops", domain="workforce", source_commit=commit
-    )
-    nodes, unreached = build_nodes(files, m)
-    return persist_nodes(db, m, nodes, unreached, StubEmbedder(dim=1024))
+def _counts(db) -> tuple[int, int, int]:
+    n = db.execute("SELECT count(*) FROM node").fetchone()[0]
+    e = db.execute("SELECT count(*) FROM spec_link").fetchone()[0]
+    c = db.execute("SELECT count(*) FROM node_chunk_embedding").fetchone()[0]
+    return n, e, c
 
 
-BASE = {
-    "manage-time/kb-manifest.yaml": "x",
-    "manage-time/architecture/documents/01-context-and-requirements/ctx.adoc": "ctx body one",
-    "manage-time/requirements/business-fct-1/solution-requirements.md": "sol body",
-}
+def test_ingest_writes_nodes_edges_chunks(db, db_url, tmp_path):
+    report = engine.ingest(valid_corpus(tmp_path), sink=BncKbSink(db_url))
+    assert report["status"] == "success"
+
+    n, e, c = _counts(db)
+    assert n > 0 and e > 0 and c > 0
+
+    # FEAT-T-001 landed: business id kept in slug, body filled from a tier chunk,
+    # status defaulted to 'approved' (the search filter keeps it).
+    row = db.execute(
+        "SELECT slug, body, status FROM node WHERE slug = 'FEAT-T-001'"
+    ).fetchone()
+    assert row is not None
+    assert row[1] is not None
+    assert row[2] == "approved"
+
+    # every chunk carries a shaper tier + a real pgvector (fake embedder, 1024-d).
+    assert db.execute(
+        "SELECT count(*) FROM node_chunk_embedding WHERE tier IS NULL"
+    ).fetchone()[0] == 0
+    assert db.execute(
+        "SELECT count(*) FROM node_chunk_embedding WHERE embedding IS NULL"
+    ).fetchone()[0] == 0
 
 
-def test_first_ingest_creates_nodes_and_embeddings(db):
-    s = _ingest(db, BASE)
-    assert s.nodes_created == 2
-    assert s.idempotent_hit is False
-    n_nodes = db.execute("SELECT count(*) FROM node").fetchone()[0]
-    assert n_nodes == 4  # capability(1) + business_function(1) + 2 leaf documents
-    n_emb = db.execute("SELECT count(*) FROM node_chunk_embedding").fetchone()[0]
-    assert n_emb >= 2
-
-
-def test_reingest_same_commit_is_idempotent(db):
-    _ingest(db, BASE, commit="c1")
-    s2 = _ingest(db, BASE, commit="c1")
-    assert s2.idempotent_hit is True
-    assert db.execute("SELECT count(*) FROM node").fetchone()[0] == 4
-
-
-def test_reingest_new_commit_versions_changed_leaf(db):
-    _ingest(db, BASE, commit="c1")
-    changed = dict(BASE)
-    changed["manage-time/architecture/documents/01-context-and-requirements/ctx.adoc"] = "ctx body TWO"
-    s2 = _ingest(db, changed, commit="c2")
-    assert s2.nodes_versioned == 1
-    assert s2.nodes_skipped == 1
-    superseded = db.execute(
-        "SELECT count(*) FROM node WHERE status = 'superseded'"
+def test_contains_graph_sets_parent_id(db, db_url, tmp_path):
+    engine.ingest(valid_corpus(tmp_path), sink=BncKbSink(db_url))
+    # the REQ child points at its feature via parent_id (the shaper `contains` graph,
+    # set in BncKbSink's second pass). This is what bnc-kb's recursive spec walk uses.
+    feat = UUID(_nid("FEAT-T-001"))
+    children = db.execute(
+        "SELECT count(*) FROM node WHERE parent_id = %s AND kind = 'REQ'", (feat,)
     ).fetchone()[0]
-    assert superseded == 1
-    v2 = db.execute(
-        "SELECT version FROM node WHERE body = 'ctx body TWO'"
-    ).fetchone()[0]
-    assert v2 == 2
+    assert children >= 1
+
+
+def test_incremental_reingest_is_idempotent(db, db_url, tmp_path):
+    corpus = valid_corpus(tmp_path)
+    sink = BncKbSink(db_url)
+    engine.ingest(corpus, sink=sink)
+    before = _counts(db)
+
+    report = engine.ingest(corpus, sink=sink, incremental=True)
+    delta = report["delta"]
+    assert delta["nodes"] == {"added": 0, "updated": 0, "deleted": 0}
+    assert delta["edges"] == {"added": 0, "deleted": 0}
+    assert delta["chunks"]["embedded"] == 0
+    assert delta["chunks"]["deleted"] == 0
+    assert _counts(db) == before  # store unchanged
+
+
+def test_ingest_seeds_all_manifest_edge_kinds(db, db_url, tmp_path):
+    # link_type (the spec_link.rel FK target) is aligned with the manifest, not just
+    # the 16 hardcoded in 0006, so any corpus edge kind has its FK target.
+    run_corpus_ingest(valid_corpus(tmp_path), db_url, incremental=False)
+    present = {r[0] for r in db.execute("SELECT code FROM link_type").fetchall()}
+    assert set(mm.EDGE_KINDS) <= present
+
+
+def test_validation_rejects_duplicate_id_and_writes_nothing(db, db_url, tmp_path):
+    report = engine.ingest(duplicate_id_corpus(tmp_path), sink=BncKbSink(db_url))
+    assert report["status"] == "rejected"
+    assert report["faulty"]
+    assert _counts(db) == (0, 0, 0)  # rejection writes nothing

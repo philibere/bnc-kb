@@ -41,6 +41,16 @@ migrate: install up ## Apply SQL migrations (idempotent)
 api: ## Run the API with reload (assumes db is up and migrated)
 	$(BIN)/uvicorn bnc_kb.api.app:app --reload --host $(HOST) --port $(PORT)
 
+.PHONY: ingest
+ingest: install ## Ingest a shaper corpus into the store: make ingest CORPUS=path [INCREMENTAL=1]
+	$(BIN)/bnc-kb-ingest $(CORPUS) $(if $(INCREMENTAL),--incremental,)
+
+SHAPER ?= ../bnc-shaper
+.PHONY: sync-metamodel
+sync-metamodel: ## Refresh the vendored metamodel manifest from the bnc-shaper checkout ($(SHAPER))
+	cp $(SHAPER)/metamodel/bnc.metamodel.yaml metamodel/bnc.metamodel.yaml
+	@echo "vendored metamodel/bnc.metamodel.yaml refreshed from $(SHAPER)"
+
 .PHONY: dev
 dev: up migrate ## Start everything: Postgres, migrations, then the API (foreground)
 	@echo "API docs: http://$(HOST):$(PORT)/docs"
