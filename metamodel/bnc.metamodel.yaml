@@ -1,0 +1,429 @@
+# =============================================================================
+# bnc.metamodel.yaml  -  Definition SDLC (couche M2) pour bnc-shaper
+# =============================================================================
+# Source unique de l'ontologie. Destine a piloter DEUX outils:
+#   - le linter deterministe (Table A)            bnc-shaper/tools/spec-linter
+#   - le moteur d'ingestion graphe + vecteur      bnc-sdlc-code/.../spec_ingestion
+#
+# PHASE 1 (ce fichier): reproduire EXACTEMENT le comportement actuel des deux
+# outils, codes en dur aujourd'hui dans:
+#   - spec_ingestion/model.py        (enums NodeKind / EdgeKind / Tier)
+#   - spec_ingestion/parsing.py      (allow-lists de frontmatter par type)
+#   - spec_ingestion/extraction.py   (mappings champ -> node / edge / chunk)
+#   - spec_ingestion/discovery.py    (classification kind-first + hints de chemin)
+#   - tools/spec-linter/src/checks.ts (FN-STR-* et TE-STR-*)
+#
+# Golden test de fidelite: linter --json + snapshots nodes/edges/chunks
+# byte-identiques sur poc/pool-hockey et example/example-velocite.
+#
+# CONVENTION DE DOUBLE ANNOTATION (chaque champ porte les deux vues):
+#   lint:   ce que le linter verifie  (required | ref:<glossary_kind> |
+#           enum:[...] | sentinel:<val> | hash | modality | purity | unique |
+#           anti-smuggling | none)
+#   graph:  ce que l'ingestion emet   (node | node-id | classifier | prop |
+#           edge:<kind>(<from>-><to>) | chunk:<tier> | none)
+# Quand lint et graph divergent, c'est une ASYMETRIE (voir bloc en fin de
+# fichier): un champ valide mais non projete, ou un edge declare mais jamais emis.
+# =============================================================================
+
+metamodel_version: 1
+
+# --- Couches ArchiMate (tranche mince) ---------------------------------------
+# Provisoire: l'affectation par node kind ci-dessous est une PROPOSITION a valider.
+layers: [strategy, business, application, technology, motivation]
+
+# --- Vocabulaire ferme: NODES ------------------------------------------------
+# Le set complet que la porte de validation accepte (model.py NodeKind).
+# Hors de ce set => batch rejete (AC-02). `produced` indique si l'extraction
+# emet reellement ce node aujourd'hui.
+node_kinds:
+  - { name: Module,         layer: application, produced: "by feature (champ module)" }
+  - { name: Feature,        layer: application, produced: "by feature" }
+  - { name: REQ,            layer: application, produced: "by feature (blocs REQ)" }
+  - { name: Entity,         layer: business,    produced: "by glossary (kind=entity)" }
+  - { name: Actor,          layer: business,    produced: "by glossary (kind=actor)" }
+  - { name: ExternalSystem, layer: application, produced: "by glossary (kind=external-system)" }
+  - { name: Process,        layer: business,    produced: "by glossary (kind=process)" }
+  - { name: Concept,        layer: motivation,  produced: "NON (aucun extracteur; concepts.md SKOS differe)" }
+  - { name: Tag,            layer: application,  produced: "NON (cible d-edge seulement, edge tagged-with reste pending)" }
+  - { name: Contrat,        layer: application, produced: "by technical (blocs CONTRACT)" }
+  - { name: Decision,       layer: motivation,  produced: "by technical (blocs DEC)" }
+  - { name: Invariant,      layer: motivation,  produced: "by invariant" }
+  - { name: Risk,           layer: motivation,  produced: "by risk (extracteur generique)" }
+  # --- Phase 1b: niveau Business (ArchiMate), ajoute EN DONNEE ---
+  - { name: Capability,     layer: business,    produced: "by capability (extracteur generique)" }
+  - { name: BusinessLine,   layer: business,    produced: "by businessline (extracteur generique)" }
+  # --- Phase 1c: niveau Motivation/gouvernance (E-23), ajoute EN DONNEE ---
+  - { name: Control,        layer: motivation,  produced: "by control (extracteur generique)" }
+
+# --- Vocabulaire ferme: EDGES ------------------------------------------------
+# Le set complet (model.py EdgeKind). `emitted` indique si l'extraction emet
+# reellement cet edge aujourd'hui. Les non-emis existent dans l'enum (donc
+# acceptes par la porte) mais aucun extracteur ne les produit.
+edge_kinds:  # ORDRE = ordre de l'enum EdgeKind d'origine (preserve l'iteration)
+  - { name: contains,        emitted: true,  rule: "Module->Feature ; Feature->REQ" }
+  - { name: affects-entity,  emitted: true,  rule: "Feature->Entity (champ entities)" }
+  - { name: performed-by,    emitted: true,  rule: "Feature->Actor (champ actors)" }
+  - { name: integrates-with, emitted: true,  rule: "Feature->ExternalSystem (champ integrations)" }
+  - { name: part-of-process, emitted: false, rule: "ATTENDU Feature->Process (champ process) mais NON emis" }
+  - { name: tagged-with,     emitted: true,  rule: "Feature->Tag (champ tags)" }
+  - { name: about-concept,   emitted: false }
+  - { name: broader,         emitted: true,  rule: "Glossary->Glossary (champ parent)" }
+  - { name: related,         emitted: false }
+  - { name: depends-on,      emitted: true,  rule: "Feature->Feature (champ depends_on)" }
+  - { name: refines,         emitted: true,  rule: "REQ->REQ (champ refines)" }
+  - { name: conflicts-with,  emitted: true,  rule: "REQ->REQ (champ conflicts_with)" }
+  - { name: supersedes,      emitted: false, rule: "ATTENDU Decision->Decision (champ supersedes) mais NON emis" }
+  - { name: satisfies,       emitted: true,  rule: "Contrat->REQ (champ satisfies)" }
+  - { name: addresses,       emitted: true,  rule: "Decision->REQ|Contrat|Invariant (champ addresses)" }
+  - { name: constrains,      emitted: true,  rule: "Invariant->Entity|Feature (champ constrains)" }
+  - { name: implemented-by,  emitted: false, rule: "sentinelle derive(annotation) exclue par construction" }
+  - { name: verified-by,     emitted: false, rule: "sentinelle derive(test) exclue par construction" }
+  # --- Phase 1c: actives EN DONNEE par les types declaratifs control/risk (E-23) ---
+  - { name: threatens,       emitted: true,  rule: "Risk->Capability (champ threatens, dir outbound)" }
+  - { name: mitigated-by,    emitted: true,  rule: "Risk->Control (champ mitigated_by, dir outbound)" }
+  - { name: accepted-by,     emitted: true,  rule: "Risk->Actor (champ accepted_by, dir outbound)" }
+  # --- Phase 1b: relations ArchiMate, ajoutees EN DONNEE (emises par l'extracteur generique) ---
+  - { name: realizes,        emitted: true,  rule: "Feature->Capability (champ realized_by, dir inbound)" }
+  - { name: serves,          emitted: true,  rule: "Capability->BusinessLine (champ business_line, dir outbound)" }
+  # --- Phase 1c: gouvernance E-23, ajoute EN DONNEE ---
+  - { name: governed-by,     emitted: true,  rule: "Capability->Control (champ governs, dir inbound)" }
+
+# --- Tiers de chunks embeddables (model.py Tier) -----------------------------
+chunk_tiers:
+  - { name: REQ,                 source: "bloc REQ: context-header + statement + acceptance" }
+  - { name: feature_summary,     source: "feature.summary" }
+  - { name: glossary_definition, source: "glossary.definition" }
+  - { name: capability_summary,   source: "capability.summary" }
+  - { name: businessline_summary, source: "businessline.summary" }
+  - { name: control_summary,      source: "control.summary" }
+  - { name: risk_summary,         source: "risk.summary" }
+
+# --- Classification (discovery.py) -------------------------------------------
+classification:
+  kind_first: true            # frontmatter `kind` fait autorite
+  path_hint_fallback: true    # le chemin n'est qu'un indice si pas de kind lisible
+  artifact_types: [feature, technical, invariant, actor, entity, external-system, process]
+  path_hints:
+    "invariants/**":                ArtifactType.invariant
+    "modules/*/features/*.technical.md": ArtifactType.technical
+    "modules/*/features/*.md":      ArtifactType.feature
+    "glossary/actors/**":           ArtifactType.actor
+    "glossary/entities/**":         ArtifactType.entity
+    "glossary/external-systems/**": ArtifactType.external_system
+    "glossary/processes/**":        ArtifactType.process
+  ignored: ["intake/**", "runs/**", "tout kind non reconnu"]  # logge, ne fait jamais echouer le batch
+
+# =============================================================================
+# SPEC TYPES
+# =============================================================================
+spec_types:
+
+  # ---------------------------------------------------------------------------
+  - name: feature
+    # PHASE 2 (reste #1): MIGRE vers l'extracteur generique cote MOTEUR. Le plus riche:
+    # noeud Module secondaire (champ module -> node {slug} + contains, hash sur {module}),
+    # props = tout le frontmatter present (defaut), chunk feature_summary, edges
+    # frontmatter ordonnes (actors,entities,integrations,depends_on,tags), blocs REQ
+    # (id composite, contains Feature->REQ, chunk REQ COMPOSE via renderer 'req_context',
+    # edges conflicts-with/refines avec compose mode feature). Cote LINTER, feature garde
+    # ses checks bespoke FN-STR-* (exclu du GEN-STR via manifest.ts) : extractor:generic
+    # ne pilote que l'extraction graphe. ORDRE des champs = ordre d'emission des edges.
+    layer: application
+    kind_value: feature
+    extractor: generic
+    id_pattern: "FEAT-{CAP}-{NNN}"        # regex ^FEAT-[A-Z0-9]+-\d{3}$ (FN-STR-001)
+    produces_node: Feature
+    summary_field: summary
+    chunk_tier: feature_summary
+    sections_required:
+      - { marker: "## Exigences", lint: "FN-STR-002 blocker si absent ; FN-STR-005 blocker si 0 REQ" }
+    stray_block_check: { rule: "### REQ- hors ## Exigences", lint: "FN-STR-012 minor" }
+    frontmatter:
+      id:           { lint: "unique+pattern (FN-STR-001)",          graph: node-id }
+      kind:         { lint: "must=feature (FN-STR-002)",            graph: classifier }
+      title:        { lint: "required (FN-STR-002)",                graph: "prop (entre dans le header du chunk REQ)" }
+      status:       { lint: "required (FN-STR-002)",                graph: prop }
+      module:       { lint: "required (FN-STR-002)",                graph: "node Module + edge contains(Module->Feature)", secondary_node: { kind: Module, prop: slug, edge: contains, dir: inbound } }
+      summary:      { lint: "required (FN-STR-002)",                graph: "chunk:feature_summary" }
+      actors:       { lint: "ref:actor (FN-STR-003)",               graph: "edge performed-by(Feature->Actor)",          ref: Actor,          edge: performed-by,    dir: outbound }
+      entities:     { lint: "ref:entity (FN-STR-003)",              graph: "edge affects-entity(Feature->Entity)",       ref: Entity,         edge: affects-entity,  dir: outbound }
+      integrations: { lint: "ref:external-system (FN-STR-003)",     graph: "edge integrates-with(Feature->ExternalSystem)", ref: ExternalSystem, edge: integrates-with, dir: outbound }
+      depends_on:   { lint: "doit resoudre vers un FEAT connu (FN-STR-004)", graph: "edge depends-on(Feature->Feature)",  ref: Feature,        edge: depends-on,      dir: outbound }
+      tags:         { lint: "ref:tag (FN-STR-003)",                 graph: "edge tagged-with(Feature->Tag) [ASYMETRIE: pas de node Tag]", ref: Tag, edge: tagged-with, dir: outbound }
+      process:      { lint: "ref:process (FN-STR-003)",             graph: "prop seulement [ASYMETRIE: part-of-process non emis]" }
+    blocks:
+      - marker: "### REQ-"
+        produces_node: REQ
+        id: composite                     # {feature-id}/REQ-NNN
+        block_id: composite
+        contains_edge: contains           # Feature --contains--> REQ
+        parent_prop: feature              # props[feature] = feature id
+        tag_is: ftype
+        chunk_tier: REQ                    # context-header + statement + acceptance
+        chunk_renderer: req_context
+        prop_fields:                       # ordre = statement, acceptance, hash (puis feature via parent_prop)
+          - { field: statement, as: text }
+          - { field: acceptance, as: text }
+          - { field: hash, as: text }
+        edges:                             # ordre = conflicts-with puis refines
+          conflicts_with: { edge: conflicts-with, compose: { mode: feature, base: self } }
+          refines:        { edge: refines,        compose: { mode: feature, base: self } }
+        fields:
+          ftype:            { lint: "enum:[F-BUSINESS] (FN-STR-006)",                graph: none }
+          statement:        { lint: "required (FN-STR-005) + modality DOIT/PEUT (FN-STR-007 major) + purity (FN-STR-011 major)", graph: "prop + chunk:REQ embed", embed: true }
+          acceptance:       { lint: none,                                            graph: "prop + chunk:REQ embed", embed: true }
+          hash:             { lint: "present+6hex+consistant sur (statement,acceptance) (FN-STR-008)", graph: "prop ; rempli par le linter --write" }
+          actors:           { lint: "ref:actor (override REQ, FN-STR-003)",          graph: "context du chunk seulement (sinon herite feature)" }
+          entities:         { lint: "ref:entity (override REQ, FN-STR-003)",         graph: "context du chunk seulement" }
+          integrations:     { lint: "ref:external-system (override REQ, FN-STR-003)", graph: none }
+          tags:             { lint: "ref:tag (override REQ, FN-STR-003)",            graph: none }
+          conflicts_with:   { lint: none,                                            graph: "edge conflicts-with(REQ->REQ)" }
+          refines:          { lint: none,                                            graph: "edge refines(REQ->REQ)" }
+          retrieval_summary: { lint: "anti-smuggling (FN-STR-010 blocker)",          graph: "non ingere [ASYMETRIE: lint-only]" }
+    governance: { author: functional-author, shaper: shaper-functional, rubric: functional.rubric.md, mode: always-on }
+
+  # ---------------------------------------------------------------------------
+  - name: technical
+    # PHASE 2 (reste #1): MIGRE vers l'extracteur generique cote MOTEUR. Pas de noeud
+    # top (produces_node absent => _resolve_top_kind None); seuls les blocs produisent.
+    # Cote LINTER, technical reste sur ses checks bespoke TE-STR-* (exclu du GEN-STR
+    # via manifest.ts) : extractor:generic ne pilote que l'extraction graphe, pas la
+    # selection de checks. Directives machine (block_id/prop_fields/tag_prop/inherit_fm/
+    # edges/compose) consommees par extract_generic; annotations prose conservees (doc).
+    layer: application                    # provisoire (contrats: app/techno selon ArchiMate)
+    kind_value: technical
+    extractor: generic
+    file_naming: "{feature-id}.technical.md"
+    binds_to: feature                     # via frontmatter `spec`
+    frontmatter:
+      spec:   { lint: "required + doit resoudre vers un feature (TE-STR-001/002)", graph: "compose les refs REQ ; aucun edge emis" }
+      kind:   { lint: "must=technical (TE-STR-002)",  graph: classifier }
+      module: { lint: "required (TE-STR-002)",        graph: prop }
+    blocks:
+      - marker: "### CONTRACT-"
+        produces_node: Contrat
+        id_pattern: "CONTRACT-{slug}"     # regex ^CONTRACT-[A-Za-z0-9-]+$ (TE-STR-003)
+        block_id: title                   # node id = titre du heading (= CONTRACT-{slug})
+        tag_is: contract_kind
+        tag_prop: subtype                 # le [TAG] du heading -> prop subtype
+        prop_fields:
+          - { field: satisfies, as: inline_list }
+        inherit_fm: [spec]                # props: satisfies, subtype, spec
+        edges:
+          satisfies: { edge: satisfies, compose: { mode: technical, base: spec } }
+        fields:
+          contract_kind:  { lint: "enum:[API,EVENT,DATA] (TE-STR-004)",                          graph: "prop subtype" }
+          satisfies:      { lint: "chaque ref doit etre un F-REQ du feature lie (TE-STR-005)",    graph: "edge satisfies(Contrat->REQ)" }
+          description:    { lint: "entre dans le hash",                                           graph: "non stocke dans node.props [ASYMETRIE]" }
+          consumers:      { lint: "doit resoudre feature|external-system (TE-STR-011)",           graph: "aucun edge emis [ASYMETRIE]" }
+          implemented-by: { lint: "sentinel:derive(annotation) (TE-STR-006)",                     graph: "non emis (sentinelle)" }
+          verified-by:    { lint: "sentinel:derive(test) (TE-STR-006)",                           graph: "non emis (sentinelle)" }
+          hash:           { lint: "present+6hex+consistant sur (kind,satisfies,description,consumers) (TE-STR-009)", graph: "rempli par --write" }
+      - marker: "### DEC-"
+        produces_node: Decision
+        id_pattern: "DEC-{slug}"          # regex ^DEC-[A-Za-z0-9-]+$ (TE-STR-003)
+        block_id: title
+        prop_fields:
+          - { field: addresses, as: inline_list }
+        inherit_fm: [spec]                # props: addresses, spec
+        edges:
+          addresses: { edge: addresses, compose: { mode: technical, base: spec } }
+        fields:
+          addresses:      { lint: "resout vers REQ du feature | CONTRACT du fichier | INV connu (TE-STR-007)", graph: "edge addresses(Decision->cible)" }
+          status:         { lint: "enum:[proposed,accepted,superseded] (TE-STR-008)",             graph: "non stocke" }
+          supersedes:     { lint: "doit etre un DEC connu (TE-STR-008)",                          graph: "edge supersedes non emis [ASYMETRIE]" }
+          choice:         { lint: "entre dans le hash",                                           graph: "non stocke" }
+          rejected:       { lint: "entre dans le hash",                                           graph: "non stocke" }
+          why:            { lint: "entre dans le hash",                                           graph: "non stocke" }
+          implemented-by: { lint: "doit etre ABSENT (TE-STR-010 major)",                          graph: n/a }
+          verified-by:    { lint: "doit etre ABSENT (TE-STR-010 major)",                          graph: n/a }
+          hash:           { lint: "present+6hex+consistant sur (addresses,choice,rejected,why,status) (TE-STR-009)", graph: "rempli par --write" }
+    chunk_tiers: []                        # contrats/decisions non embeddes en v1
+    governance: { author: [technical-author, data-author], shaper: shaper-technical, rubric: technical.rubric.md, mode: conditional }
+
+  # ---------------------------------------------------------------------------
+  - name: invariant
+    # PHASE 1.5: MIGRE vers l'extracteur generique. Premier type historique a devenir
+    # de la donnee. Possible parce qu'il n'a ni bloc, ni chunk, ni check Table A
+    # auparavant (linter_table_a etait NON_IMPLEMENTE); en migrant il GAGNE les checks
+    # structurels GEN-STR-*. Le champ `constrains` (refs groupees entites+features sous
+    # un meme edge) a motive l'ajout du support `groups` a l'interpreteur, feature
+    # generale reutilisable. verified-by (sentinelle) et hash ne sont plus modelises.
+    layer: motivation
+    kind_value: invariant
+    extractor: generic
+    id_pattern: "INV-{NNN}-{slug}"
+    id_regex: "^INV-\\d{3}-[a-z0-9-]+$"
+    produces_node: Invariant
+    required_frontmatter: [name]
+    frontmatter:
+      id:     { graph: node-id }
+      kind:   { graph: classifier }
+      name:   { graph: prop }
+      status: { graph: prop }
+      constrains:                          # ref GROUPEE: un meme edge constrains, deux types de cible
+        edge: constrains
+        dir: outbound
+        groups:
+          entities: { ref: Entity }
+          features: { ref: Feature }
+    governance: { author: rules-author, shaper: shaper-rules, rubric: rules.rubric.md, mode: always-on }
+
+  # ---------------------------------------------------------------------------
+  - name: glossary
+    # PHASE 2 (reste #1): MIGRE vers l'extracteur generique cote MOTEUR. Vocab via
+    # produces_node_by_kind (le node kind suit `kind`). node_props = sous-ensemble
+    # ordonne {name, aliases(list), definition(stripped)} (le bespeke ne stockait
+    # PAS id/kind/status/parent). Chunk definition (strippe). Edge broader depuis
+    # parent. Cote LINTER, glossary garde son role Vocab (FN-STR-003), exclu du
+    # GEN-STR via manifest.ts : extractor:generic ne pilote que l'extraction graphe.
+    extractor: generic
+    produces_node_by_kind:
+      actor:           { node: Actor,          layer: business }
+      entity:          { node: Entity,         layer: business }
+      external-system: { node: ExternalSystem, layer: application }
+      process:         { node: Process,        layer: business }
+    id: slug                                # pas de pattern impose ; sert d'ancre de resolution
+    linter_role: "construit le Vocab (id + aliases) que FN-STR-003 resout ; status=deprecated => blocker quand reference"
+    summary_field: definition
+    chunk_tier: glossary_definition
+    node_props:                             # sous-ensemble ordonne + transforms (fidele au bespoke)
+      - { field: name }
+      - { field: aliases, as: list }
+      - { field: definition, as: stripped }
+    frontmatter:
+      id:         { lint: "cle de resolution",         graph: node-id }
+      kind:       { lint: "discrimine le node",         graph: classifier }
+      name:       { lint: "alias de resolution",        graph: prop }
+      aliases:    { lint: "alias de resolution",        graph: prop }
+      status:     { lint: "active|deprecated (FN-STR-003)", graph: prop }
+      parent:     { lint: none,                         graph: "edge broader(self->parent)", edge: broader, dir: outbound }
+      definition: { lint: none,                         graph: "chunk:glossary_definition", embed: true }
+    governance: { author: "distribue (data-author entites, intake-analyst, scribe merge candidats)", shaper: "valide via shaper-functional", rubric: functional.rubric.md, mode: always-on }
+
+  # ---------------------------------------------------------------------------
+  # PHASE 1b: types DECLARATIFS, pilotes par l'extracteur generique (extractor:
+  # generic). Frontmatter STRUCTURE (pas de prose): consomme tel quel par le
+  # moteur. Ajouter un tel type = editer ce manifeste, AUCUN code moteur.
+  #   ref + edge + dir : un champ-reference emet un edge.
+  #     dir: outbound  => edge (self)->(ref)
+  #     dir: inbound   => edge (ref)->(self)
+  # ---------------------------------------------------------------------------
+  - name: capability
+    layer: business
+    kind_value: capability
+    extractor: generic
+    id_pattern: "CAP-{DOMAIN}-{NNN}"
+    id_regex: "^CAP-[A-Z0-9]+-\\d{3}$"
+    produces_node: Capability
+    summary_field: summary
+    chunk_tier: capability_summary
+    required_frontmatter: [title, summary]
+    frontmatter:
+      id:            { graph: node-id }
+      kind:          { graph: classifier }
+      title:         { graph: prop }
+      status:        { graph: prop }
+      summary:       { graph: chunk, embed: true }
+      business_line: { ref: BusinessLine, edge: serves,   dir: outbound }
+      realized_by:   { ref: Feature,      edge: realizes, dir: inbound }
+    governance: { author: capability-author, shaper: shaper-capability, rubric: capability.rubric.md, mode: conditional }
+
+  - name: businessline
+    layer: business
+    kind_value: businessline
+    extractor: generic
+    id_pattern: "BL-{SLUG}"
+    id_regex: "^BL-[A-Za-z0-9-]+$"
+    produces_node: BusinessLine
+    summary_field: summary
+    chunk_tier: businessline_summary
+    required_frontmatter: [title]
+    frontmatter:
+      id:      { graph: node-id }
+      kind:    { graph: classifier }
+      title:   { graph: prop }
+      status:  { graph: prop }
+      summary: { graph: chunk, embed: true }   # optionnel: si present, devient un chunk retrievable
+
+  # ---------------------------------------------------------------------------
+  # PHASE 1c: gouvernance transversale (BSIF E-23). Types DECLARATIFS reposant
+  # sur l'extracteur generique. Le spine auditable:
+  #   Capability --governed-by--> Control <--mitigated-by-- Risk --threatens--> Capability
+  #   Risk --accepted-by--> Actor
+  # Aucun code moteur ni linter: edition manifeste pure (Control + governed-by
+  # ajoutes au vocabulaire ferme; threatens/mitigated-by/accepted-by actives).
+  # ---------------------------------------------------------------------------
+  - name: control
+    layer: motivation
+    kind_value: control
+    extractor: generic
+    id_pattern: "CTRL-{DOMAIN}-{NNN}"
+    id_regex: "^CTRL-[A-Z0-9]+-\\d{3}$"
+    produces_node: Control
+    summary_field: summary
+    chunk_tier: control_summary
+    required_frontmatter: [title, summary]
+    frontmatter:
+      id:         { graph: node-id }
+      kind:       { graph: classifier }
+      title:      { graph: prop }
+      status:     { graph: prop }
+      regulation: { graph: prop }
+      summary:    { graph: chunk, embed: true }
+      governs:    { ref: Capability, edge: governed-by, dir: inbound }
+    governance: { author: governance-author, shaper: shaper-governance, rubric: governance.rubric.md, mode: conditional }
+
+  - name: risk
+    layer: motivation
+    kind_value: risk
+    extractor: generic
+    id_pattern: "RISK-{DOMAIN}-{NNN}"
+    id_regex: "^RISK-[A-Z0-9]+-\\d{3}$"
+    produces_node: Risk
+    summary_field: summary
+    chunk_tier: risk_summary
+    required_frontmatter: [title, summary]
+    frontmatter:
+      id:           { graph: node-id }
+      kind:         { graph: classifier }
+      title:        { graph: prop }
+      status:       { graph: prop }
+      severity:     { graph: prop }
+      summary:      { graph: chunk, embed: true }
+      threatens:    { ref: Capability, edge: threatens,    dir: outbound }
+      mitigated_by: { ref: Control,    edge: mitigated-by, dir: outbound }
+      accepted_by:  { ref: Actor,      edge: accepted-by,  dir: outbound }
+    governance: { author: governance-author, shaper: shaper-governance, rubric: governance.rubric.md, mode: conditional }
+
+# =============================================================================
+# DIFFERE (declare dans l'enum/rubriques mais hors-perimetre des extracteurs v1)
+# =============================================================================
+deferred:
+  tags_glossary:    "glossary/tags.md (liste plate) non classifie par discovery => edge tagged-with reste pending"
+  concepts_glossary: "glossary/concepts.md (SKOS) differe, node Concept jamais emis"
+
+# =============================================================================
+# PROJECTION EXECUTABLE POUR LE LINTER (Table A)
+# =============================================================================
+# Valeurs machine consommees par tools/spec-linter (checks.ts via manifest.ts).
+# Miroir 1:1 des constantes auparavant codees en dur dans checks.ts. C'est ici
+# que vit desormais le vocabulaire/grammaire du linter (plus dans le .ts).
+# Phase 2: unifier avec la section spec_types ci-dessus (source vraiment unique).
+linter:
+  conventions:
+    hash_format: "^[0-9a-f]{6}$"
+    statement_modality: { pattern: "\\b(DOIT|DOIVENT|PEUT|PEUVENT)\\b", flags: "" }
+    statement_purity:   { pattern: "\\b(GET|POST|PUT|PATCH|DELETE|endpoint|REST|DTO|JSON|payload|SELECT|INSERT|UPDATE|controller|repository|microservice|kafka|gRPC)\\b", flags: "i" }
+    sentinels:
+      implemented_by: "derive(annotation)"
+      verified_by:    "derive(test)"
+  feature:
+    id_regex:   "^FEAT-[A-Z0-9]+-\\d{3}$"
+    ftype_enum: [F-BUSINESS]
+  technical:
+    contract_id_regex:    "^CONTRACT-[A-Za-z0-9-]+$"
+    decision_id_regex:    "^DEC-[A-Za-z0-9-]+$"
+    contract_kind_enum:   [API, EVENT, DATA]
+    decision_status_enum: [proposed, accepted, superseded]

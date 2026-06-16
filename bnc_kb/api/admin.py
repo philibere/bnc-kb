@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from bnc_kb.api.auth import require_role
 from bnc_kb.db.connection import get_pool
-from bnc_kb.embeddings import StubEmbedder, chunk_text, to_vector_literal
 from bnc_kb.models import DimensionIn, LinkTypeIn
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -65,25 +64,3 @@ def add_link_type(body: LinkTypeIn, _role: str = Depends(require_role("admin")))
         except psycopg.errors.UniqueViolation:
             raise HTTPException(status_code=409, detail=f"link type {body.code!r} already exists")
     return {"code": body.code}
-
-
-@router.post("/reembed")
-def reembed(_role: str = Depends(require_role("admin"))) -> dict:
-    """Recompute embeddings for every document node (e.g. after swapping embedder)."""
-    embedder = StubEmbedder()
-    rewritten = 0
-    with get_pool().connection() as conn:
-        with conn.transaction():
-            docs = conn.execute(
-                "SELECT id, body FROM node WHERE body IS NOT NULL"
-            ).fetchall()
-            conn.execute("TRUNCATE node_chunk_embedding")
-            for node_id, body in docs:
-                for ord_, vec in enumerate(embedder.embed(chunk_text(body))):
-                    conn.execute(
-                        "INSERT INTO node_chunk_embedding (node_id, ord, embedding) "
-                        "VALUES (%s, %s, %s::vector)",
-                        (node_id, ord_, to_vector_literal(vec)),
-                    )
-                    rewritten += 1
-    return {"chunks": rewritten}

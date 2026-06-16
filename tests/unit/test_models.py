@@ -1,12 +1,11 @@
-import pytest
-from pydantic import ValidationError
-
-from bnc_kb.models import Coverage, IngestManifest, SearchRequest
+from bnc_kb.models import Coverage, IngestResult, SearchRequest
 
 
-def test_manifest_requires_all_fields():
-    with pytest.raises(ValidationError):
-        IngestManifest(capability_slug="x", category="c")  # missing domain, source_commit
+def test_ingest_result_defaults():
+    r = IngestResult(status="success")
+    assert r.nodes == 0
+    assert r.faulty == []
+    assert r.delta is None
 
 
 def test_coverage_defaults():

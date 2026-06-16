@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 from bnc_kb.api.auth import require_role
 from bnc_kb.db.connection import get_pool
-from bnc_kb.embeddings import StubEmbedder
+from bnc_kb.embeddings import embed_query
 from bnc_kb.models import (
     Coverage,
     LinkHit,
@@ -24,7 +24,7 @@ router = APIRouter(tags=["search"])
 
 @router.post("/search", response_model=SearchResponse)
 def search(req: SearchRequest, _role: str = Depends(require_role("read"))) -> SearchResponse:
-    qvec = StubEmbedder().embed([req.query])[0]
+    qvec = embed_query(req.query)
     with get_pool().connection() as conn:
         rows = search_specs(conn, qvec, req.dimension, req.status, req.k)
     hits = [NodeHit(**r) for r in rows]
